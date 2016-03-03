@@ -1,3 +1,5 @@
+require 'fiber'
+
 # encoding: ascii
 module Dalli
   class Client
@@ -58,10 +60,18 @@ module Dalli
     # pipelined as Dalli will use 'quiet' operations where possible.
     # Currently supports the set, add, replace and delete operations.
     def multi
-      old, Thread.current[:dalli_multi] = Thread.current[:dalli_multi], true
+      if @options[:async]
+        ring.servers.each { |server| server.multi_fibres << Fiber.current }
+      else
+        old, Thread.current[:dalli_multi] = Thread.current[:dalli_multi], true
+      end
       yield
     ensure
-      Thread.current[:dalli_multi] = old
+      if @options[:async]
+        ring.servers.each { |server| server.multi_fibres.delete(Fiber.current) }
+      else
+        Thread.current[:dalli_multi] = old
+      end
     end
 
     def get(key, options=nil)

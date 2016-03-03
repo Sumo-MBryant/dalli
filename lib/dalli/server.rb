@@ -1,6 +1,7 @@
 require 'socket'
 require 'timeout'
 require 'zlib'
+require 'fiber'
 
 module Dalli
   class Server
@@ -8,6 +9,7 @@ module Dalli
     attr_accessor :port
     attr_accessor :weight
     attr_accessor :options
+    attr_accessor :multi_fibres
 
     DEFAULTS = {
       # seconds between trying to contact a remote server
@@ -37,6 +39,7 @@ module Dalli
       @options = DEFAULTS.merge(options)
       @sock = nil
       @msg = nil
+      @multi_fibres = Set.new
     end
 
     # Chokepoint method for instrumentation
@@ -141,7 +144,11 @@ module Dalli
     end
 
     def multi?
-      Thread.current[:dalli_multi]
+      if options[:async]
+        Thread.current[:dalli_multi]
+      else
+        multi_fibres.include?(Fiber.current)
+      end
     end
 
     def get(key)
